@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Laporan Pembelian & Penerimaan Barang</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--navy:#17324f;--blue:#286090;--line:#d9e1e8;--bg:#f3f6f9;--text:#263445;--pale:#edf3f8;--green:#16804a;--red:#a52b2b}
+*{box-sizing:border-box}
+body{margin:0;padding:24px;background:var(--bg);font:14px Arial,sans-serif;color:var(--text)}
+.sheet{max-width:1200px;margin:auto;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+header{background:var(--navy);color:#fff;padding:24px 28px}
+header h1{font-size:21px;margin:0 0 6px}header p{margin:0;color:#d5e1ed;font-size:12px}
+main{padding:26px}
+section{margin-bottom:22px;border:1px solid var(--line);border-radius:8px;padding:18px}
+h2{font-size:14px;color:var(--navy);margin:0 0 15px;padding:0 0 10px;border-bottom:2px solid #e8eef4}
+.section-note{font-size:12px;color:#66778a;margin:-5px 0 13px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:13px 16px}
+label{display:block;font-size:12px;font-weight:700;margin-bottom:6px}
+input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:5px;font:13px Arial;color:var(--text);background:#fff}
+textarea{min-height:70px;resize:vertical}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:790px}
+th{background:var(--pale);color:var(--navy);font-size:12px;text-align:left}
+th,td{padding:9px;border:1px solid var(--line);vertical-align:middle}
+td input,td select{border:0;padding:6px;min-width:55px}
+.photo-cell{text-align:center;width:150px}
+.photo-cell input[type=file]{font-size:10px;max-width:135px}
+.thumb{display:none;width:105px;height:85px;object-fit:contain;margin:7px auto 0;border:1px solid var(--line);border-radius:4px;background:#f7f9fb}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+button{border:0;border-radius:5px;padding:10px 15px;font-weight:700;cursor:pointer}
+button:disabled{opacity:.55;cursor:not-allowed}
+.primary{background:var(--blue);color:#fff}.secondary{background:#e8edf2;color:var(--navy)}.danger{background:#fbe9e9;color:var(--red)}.success{background:var(--green);color:#fff}
+.approvals{display:grid;grid-template-columns:repeat(3,1fr);gap:15px}
+.approval{border:1px solid var(--line);border-radius:7px;padding:13px;background:#fbfcfd}
+.approval input[type=text]{margin-top:7px}
+.approval .check{display:flex;align-items:center;gap:7px;margin-top:12px}
+.approval .check input{width:auto;margin:0}
+.status{padding:10px 12px;border-radius:6px;margin:0 0 16px;font-size:13px;background:#eef5fb;color:#214d70}
+.status.error{background:#fff0f0;color:#a52b2b}.status.ok{background:#edf8f1;color:#17633b}
+.history-tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.history-tools input{max-width:350px}
+.history-card{border:1px solid var(--line);border-radius:7px;padding:13px;margin-top:9px;display:flex;justify-content:space-between;gap:12px;align-items:center}
+.history-card strong{color:var(--navy)}.history-meta{font-size:12px;color:#66778a;margin-top:5px}
+.history-actions{display:flex;gap:7px;flex-wrap:wrap}
+.empty{padding:18px;text-align:center;color:#718096;background:#f8fafc;border-radius:6px}
+footer{text-align:center;padding:13px;background:#f7f9fb;color:#718096;font-size:11px}
+@media(max-width:700px){body{padding:8px}main{padding:12px}section{padding:13px}.grid{grid-template-columns:1fr 1fr}.approvals{grid-template-columns:1fr}.history-card{align-items:flex-start;flex-direction:column}}
+@media print{@page{size:A4 landscape;margin:10mm}body{padding:0;background:#fff}.sheet{border:0;border-radius:0}header,th{print-color-adjust:exact;-webkit-print-color-adjust:exact}section{break-inside:avoid}.no-print{display:none!important}input,select,textarea{border:0;padding:3px;appearance:none}.thumb{display:block!important}}
+</style>
+</head>
+<body>
+<div class="sheet">
+<header>
+ <h1>LAPORAN PEMBELIAN & PENERIMAAN BARANG</h1>
+ <p>FORMULIR ADMINISTRASI PERUSAHAAN • TERHUBUNG KE SUPABASE</p>
+</header>
+<main>
+ <div id="connectionStatus" class="status">Menghubungkan ke database...</div>
+
+ <section class="no-print">
+  <h2>RIWAYAT PEMBELIAN & PENERIMAAN</h2>
+  <div class="history-tools">
+   <input id="historySearch" placeholder="Cari nomor laporan / supplier / pemesan..." oninput="renderHistory()">
+   <button class="secondary" onclick="loadHistory()">↻ Muat Ulang</button>
+   <button class="secondary" onclick="newReport()">+ Laporan Baru</button>
+  </div>
+  <div id="historyList"><div class="empty">Memuat riwayat...</div></div>
+ </section>
+
+ <div id="formTitle" style="font-weight:700;color:#17324f;margin:0 0 12px">FORMULIR BARU</div>
+ <section>
+  <h2>01. INFORMASI PEMBELIAN</h2>
+  <div class="grid">
+   <div><label>Nomor Laporan</label><input data-field="report_no" placeholder="Contoh: PB-001/2026"></div>
+   <div><label>Tanggal Pembelian</label><input data-field="purchase_date" type="date"></div>
+   <div><label>Nama Supplier</label><input data-field="supplier" placeholder="Nama supplier"></div>
+   <div><label>Nama Pemesan</label><input data-field="requester" placeholder="Nama pemesan"></div>
+   <div><label>Departemen</label><input data-field="department" placeholder="Departemen"></div>
+   <div><label>Keperluan</label><input data-field="purpose" placeholder="Tujuan pembelian"></div>
+  </div>
+ </section>
+
+ <section>
+  <h2>02. DETAIL BARANG YANG DIBELI</h2>
+  <p class="section-note">Isi daftar barang yang dipesan dan tambahkan foto masing-masing barang.</p>
+  <div class="table-wrap"><table>
+   <thead><tr><th style="width:40px">No.</th><th>Nama Barang</th><th style="width:100px">Jumlah Pesan</th><th style="width:110px">Satuan</th><th style="width:165px">Foto Barang</th><th class="no-print" style="width:75px">Aksi</th></tr></thead>
+   <tbody id="purchaseItems"></tbody>
+  </table></div>
+  <div class="actions no-print"><button class="secondary" onclick="addRow('purchaseItems','purchase')">+ Tambah Barang</button></div>
+ </section>
+
+ <section>
+  <h2>03. INFORMASI PENERIMAAN BARANG</h2>
+  <div class="grid">
+   <div><label>Tanggal Diterima</label><input data-field="received_date" type="date"></div>
+   <div><label>Nama Penerima</label><input data-field="receiver" placeholder="Nama lengkap penerima"></div>
+   <div><label>Departemen / Bagian</label><input data-field="receiver_department" placeholder="Bagian penerima"></div>
+   <div><label>Lokasi Penerimaan</label><input data-field="location" placeholder="Gudang / area / departemen"></div>
+   <div><label>Nomor Surat Jalan</label><input data-field="delivery_note" placeholder="Nomor surat jalan (opsional)"></div>
+   <div><label>Waktu Penerimaan</label><input data-field="received_time" type="time"></div>
+  </div>
+ </section>
+
+ <section>
+  <h2>04. DETAIL BARANG YANG DITERIMA</h2>
+  <p class="section-note">Catat barang yang benar-benar diterima. Tambahkan foto kondisi barang saat diterima.</p>
+  <div class="table-wrap"><table>
+   <thead><tr><th style="width:40px">No.</th><th>Nama Barang</th><th style="width:100px">Jumlah Diterima</th><th style="width:105px">Satuan</th><th style="width:125px">Kondisi</th><th style="width:135px">Status</th><th style="width:165px">Foto Barang Diterima</th><th class="no-print" style="width:75px">Aksi</th></tr></thead>
+   <tbody id="receivedItems"></tbody>
+  </table></div>
+  <div class="actions no-print"><button class="secondary" onclick="addRow('receivedItems','received')">+ Tambah Barang Diterima</button></div>
+  <div style="margin-top:15px"><label>Catatan Penerimaan</label><textarea data-field="receiving_note" placeholder="Contoh: barang diterima lengkap, ada kekurangan, kerusakan, atau catatan lainnya"></textarea></div>
+ </section>
+
+ <section>
+  <h2>05. PERSETUJUAN</h2>
+  <p class="section-note">Isi nama masing-masing, lalu klik kotak konfirmasi.</p>
+  <div class="approvals">
+   <div class="approval"><label>Disiapkan Oleh</label><input data-field="prepared_by" type="text" placeholder="Nama lengkap"><label class="check"><input data-field="prepared_confirmed" type="checkbox"> Konfirmasi</label></div>
+   <div class="approval"><label>Diterima Oleh</label><input data-field="accepted_by" type="text" placeholder="Nama lengkap"><label class="check"><input data-field="accepted_confirmed" type="checkbox"> Konfirmasi</label></div>
+   <div class="approval"><label>Disetujui Oleh</label><input data-field="approved_by" type="text" placeholder="Nama lengkap"><label class="check"><input data-field="approved_confirmed" type="checkbox"> Konfirmasi</label></div>
+  </div>
+ </section>
+
+ <div class="actions no-print">
+  <button id="saveBtn" class="success" onclick="saveReport()">Simpan ke Supabase</button>
+  <button class="primary" onclick="window.print()">Cetak / Simpan PDF</button>
+  <button class="secondary" onclick="newReport()">Laporan Baru / Kosongkan</button>
+  <button class="secondary" onclick="loadHistory()">Muat Ulang Riwayat</button>
+ </div>
+</main>
+<footer>Dokumen internal perusahaan • Data laporan dan foto disimpan secara online melalui Supabase.</footer>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://iphiolhqpaxhiwwigxyl.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_bNjEu-tOspwFelkM2CFo7A_Ds9349Kg';
+const TABLE = 'pembelian_penerimaan';
+const BUCKET = 'bukti-pembelian';
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let editingId = null;
+let historyData = [];
+
+function setStatus(message,type=''){
+ const el=document.getElementById('connectionStatus');
+ el.textContent=message;el.className='status '+type;
+}
+function addRow(bodyId,type,data={}){
+ const body=document.getElementById(bodyId),r=body.insertRow();
+ const photoLabel=type==='purchase'?'Foto Barang':'Foto Barang Diterima';
+ const qtyLabel=type==='purchase'?'Jumlah Pesan':'Jumlah Diterima';
+ const extra=type==='received'
+  ?`<td><select data-col="condition"><option>Baik</option><option>Rusak</option><option>Tidak lengkap</option></select></td><td><select data-col="item_status"><option>Sesuai</option><option>Tidak sesuai</option><option>Pending</option></select></td>`:'';
+ r.innerHTML=`<td></td>
+ <td><input data-col="name" placeholder="Nama barang"></td>
+ <td><input data-col="quantity" type="number" min="0" placeholder="${qtyLabel}"></td>
+ <td><input data-col="unit" placeholder="Pcs / Unit"></td>
+ ${extra}
+ <td class="photo-cell">
+  <label class="no-print" style="font-size:10px">${photoLabel}</label>
+  <input class="no-print" data-col="photo_file" type="file" accept="image/*" capture="environment" onchange="previewPhoto(this)">
+  <img class="thumb" alt="Foto barang">
+ </td>
+ <td class="no-print"><button class="danger" onclick="this.closest('tr').remove();numberRows('${bodyId}')">Hapus</button></td>`;
+ if(data.name)r.querySelector('[data-col="name"]').value=data.name;
+ if(data.quantity!==undefined)r.querySelector('[data-col="quantity"]').value=data.quantity;
+ if(data.unit)r.querySelector('[data-col="unit"]').value=data.unit;
+ if(type==='received'){
+  if(data.condition)r.querySelector('[data-col="condition"]').value=data.condition;
+  if(data.item_status)r.querySelector('[data-col="item_status"]').value=data.item_status;
+ }
+ const img=r.querySelector('.thumb');
+ if(data.photo_url){img.src=data.photo_url;img.style.display='block';img.dataset.path=data.photo_path||'';}
+ numberRows(bodyId);
+}
+function numberRows(bodyId){[...document.querySelectorAll('#'+bodyId+' tr')].forEach((r,i)=>r.cells[0].textContent=i+1)}
+function previewPhoto(input){
+ const img=input.closest('td').querySelector('img'),file=input.files&&input.files[0];
+ if(!file)return;
+ if(!file.type.startsWith('image/')){alert('Pilih file gambar.');input.value='';return}
+ img.src=URL.createObjectURL(file);img.style.display='block';
+}
+function getRows(bodyId,type){
+ return [...document.querySelectorAll('#'+bodyId+' tr')].map(row=>{
+  const get=k=>row.querySelector(`[data-col="${k}"]`);
+  const img=row.querySelector('.thumb');
+  return {
+   name:get('name')?.value.trim()||'',
+   quantity:get('quantity')?.value||'',
+   unit:get('unit')?.value.trim()||'',
+   ...(type==='received'?{condition:get('condition')?.value||'Baik',item_status:get('item_status')?.value||'Sesuai'}:{}),
+   photo_url:img?.src&&img.style.display!=='none'&&!img.src.startsWith('blob:')?img.src:'',
+   photo_path:img?.dataset.path||'',
+   _file:get('photo_file')?.files?.[0]||null
+  };
+ }).filter(x=>x.name||x.quantity||x._file||x.photo_url);
+}
+function getFormData(){
+ const data={};
+ document.querySelectorAll('[data-field]').forEach(el=>data[el.dataset.field]=el.type==='checkbox'?el.checked:el.value);
+ data.purchase_items=getRows('purchaseItems','purchase');
+ data.received_items=getRows('receivedItems','received');
+ return data;
+}
+async function uploadPhotos(items,folder){
+ for(let i=0;i<items.length;i++){
+  const item=items[i];
+  if(!item._file)continue;
+  const ext=(item._file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
+  const path=`${folder}/${Date.now()}-${i}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const {error}=await db.storage.from(BUCKET).upload(path,item._file,{upsert:false,contentType:item._file.type});
+  if(error)throw new Error('Gagal mengunggah foto: '+error.message);
+  const {data}=db.storage.from(BUCKET).getPublicUrl(path);
+  item.photo_url=data.publicUrl;item.photo_path=path;
+  delete item._file;
+ }
+ return items.map(({_file,...item})=>item);
+}
+async function saveReport(){
+ const btn=document.getElementById('saveBtn');
+ const raw=getFormData();
+ if(!raw.report_no.trim()){alert('Nomor Laporan wajib diisi.');return}
+ if(!raw.purchase_date){alert('Tanggal Pembelian wajib diisi.');return}
+ if(!raw.supplier.trim()){alert('Nama Supplier wajib diisi.');return}
+ btn.disabled=true;btn.textContent='Menyimpan...';
+ try{
+  const folder=editingId||crypto.randomUUID();
+  raw.purchase_items=await uploadPhotos(raw.purchase_items,folder+'/pembelian');
+  raw.received_items=await uploadPhotos(raw.received_items,folder+'/penerimaan');
+  const payload={
+   report_no:raw.report_no.trim(),
+   purchase_date:raw.purchase_date,
+   supplier:raw.supplier.trim(),
+   requester:raw.requester||'',
+   form_data:raw,
+   updated_at:new Date().toISOString()
+  };
+  let result;
+  if(editingId) result=await db.from(TABLE).update(payload).eq('id',editingId).select().single();
+  else result=await db.from(TABLE).insert(payload).select().single();
+  if(result.error)throw result.error;
+  editingId=result.data.id;
+  document.getElementById('formTitle').textContent='EDIT LAPORAN: '+raw.report_no;
+  setStatus('Laporan berhasil disimpan ke Supabase.','ok');
+  await loadHistory();
+  alert('Laporan berhasil disimpan.');
+ }catch(err){
+  console.error(err);setStatus('Gagal menyimpan: '+(err.message||err),'error');
+  alert('Gagal menyimpan ke Supabase:\\n'+(err.message||err)+'\\n\\nPastikan SQL tabel dan Storage sudah dijalankan.');
+ }finally{btn.disabled=false;btn.textContent='Simpan ke Supabase'}
+}
+async function loadHistory(){
+ const box=document.getElementById('historyList');box.innerHTML='<div class="empty">Memuat riwayat...</div>';
+ const {data,error}=await db.from(TABLE).select('id,report_no,purchase_date,supplier,requester,created_at,updated_at').order('created_at',{ascending:false});
+ if(error){box.innerHTML='<div class="empty">Gagal memuat riwayat: '+escapeHtml(error.message)+'</div>';setStatus('Database belum siap atau akses ditolak: '+error.message,'error');return}
+ historyData=data||[];renderHistory();setStatus('Terhubung ke Supabase • '+historyData.length+' laporan tersimpan.','ok');
+}
+function renderHistory(){
+ const q=(document.getElementById('historySearch').value||'').toLowerCase();
+ const list=historyData.filter(x=>[x.report_no,x.supplier,x.requester].join(' ').toLowerCase().includes(q));
+ const box=document.getElementById('historyList');
+ if(!list.length){box.innerHTML='<div class="empty">Belum ada laporan tersimpan.</div>';return}
+ box.innerHTML=list.map(x=>`<div class="history-card">
+  <div><strong>${escapeHtml(x.report_no||'-')}</strong><div class="history-meta">Tanggal: ${escapeHtml(x.purchase_date||'-')} • Supplier: ${escapeHtml(x.supplier||'-')} • Pemesan: ${escapeHtml(x.requester||'-')}</div></div>
+  <div class="history-actions"><button class="secondary" onclick="editReport('${x.id}')">Buka / Edit</button><button class="danger" onclick="deleteReport('${x.id}')">Hapus</button></div>
+ </div>`).join('');
+}
+async function editReport(id){
+ setStatus('Mengambil data laporan...');
+ const {data,error}=await db.from(TABLE).select('*').eq('id',id).single();
+ if(error){alert('Gagal membuka laporan: '+error.message);return}
+ editingId=id;const f=data.form_data||{};
+ document.querySelectorAll('[data-field]').forEach(el=>{
+  const v=f[el.dataset.field];
+  if(el.type==='checkbox')el.checked=!!v;else el.value=v??'';
+ });
+ document.getElementById('purchaseItems').innerHTML='';
+ document.getElementById('receivedItems').innerHTML='';
+ (f.purchase_items||[]).forEach(x=>addRow('purchaseItems','purchase',x));
+ (f.received_items||[]).forEach(x=>addRow('receivedItems','received',x));
+ if(!(f.purchase_items||[]).length)addRow('purchaseItems','purchase');
+ if(!(f.received_items||[]).length)addRow('receivedItems','received');
+ document.getElementById('formTitle').textContent='EDIT LAPORAN: '+(f.report_no||data.report_no);
+ document.getElementById('saveBtn').textContent='Simpan Perubahan';
+ window.scrollTo({top:0,behavior:'smooth'});
+ setStatus('Laporan dibuka. Silakan edit lalu klik Simpan Perubahan.','ok');
+}
+async function deleteReport(id){
+ if(!confirm('Hapus laporan ini dari Supabase? Tindakan ini tidak dapat dibatalkan.'))return;
+ const {data,error:readError}=await db.from(TABLE).select('form_data').eq('id',id).single();
+ if(readError){alert('Gagal membaca data: '+readError.message);return}
+ const paths=[];
+ for(const group of ['purchase_items','received_items'])for(const item of (data.form_data?.[group]||[]))if(item.photo_path)paths.push(item.photo_path);
+ const {error}=await db.from(TABLE).delete().eq('id',id);
+ if(error){alert('Gagal menghapus: '+error.message);return}
+ if(paths.length)await db.storage.from(BUCKET).remove(paths);
+ if(editingId===id)newReport();
+ await loadHistory();alert('Laporan berhasil dihapus.');
+}
+function newReport(){
+ editingId=null;
+ document.querySelectorAll('[data-field]').forEach(el=>{if(el.type==='checkbox')el.checked=false;else el.value=''});
+ document.getElementById('purchaseItems').innerHTML='';
+ document.getElementById('receivedItems').innerHTML='';
+ addRow('purchaseItems','purchase');addRow('receivedItems','received');
+ document.getElementById('formTitle').textContent='FORMULIR BARU';
+ document.getElementById('saveBtn').textContent='Simpan ke Supabase';
+ window.scrollTo({top:0,behavior:'smooth'});
+}
+function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+addRow('purchaseItems','purchase');addRow('receivedItems','received');
+loadHistory();
+</script>
+</body>
+</html>
